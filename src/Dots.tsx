@@ -1,38 +1,35 @@
-import { useState } from "react";
-import regl from "react-regl";
-import useWindowSize from "./hooks/useWindowSize";
+import reactRegl from "react-regl";
+import { DefaultContext } from 'regl'
+import { RGBA } from "./model";
+import Point from "./models/Point";
 
-type RGBA = [number, number, number, number]
-
-interface Dot {
-    x: number;
-    y: number;
-    r: number;
-    c: RGBA
-}
-
-interface Props {
-    stageWidth: number, 
-    stageHeight: number
-}
-
-const N = 100_000
-
-const points: Dot[] = Array
-    .from(new Array(N), (_, index) => index + 1)
-    .map( i => ({
-        x: Math.random(), 
-        y: Math.random(), 
-        r: 15 * Math.random() + 10, 
-        c: [Math.random(), Math.random(), Math.random(), 1]
-    }))
+const reduce = (points: Point[]) => points.reduce( ( prev, p ) => {
+    prev.ps.push( [p.getPos().x, p.getPos().y] )
+    prev.rs.push( p.radius );
+    prev.cs.push( p.color );
+    return prev;
+}, { ps: [] as [number, number][], rs: [] as number[], cs: [] as RGBA[]  } )
 
 
-const useDots = () => {
+const useCreateDots = ( points: Point[] ) => {
 
-    const [dots, setDots] = useState<Dot[]>(points)
+    let ps: [number, number][] = [];
+    let rs: number[] = [];
+    let cs: RGBA[] = [];
 
-    return regl({
+    const r = reduce( points )
+    ps = r.ps;
+    rs = r.rs;
+    cs = r.cs;
+
+    const updatePoints = ( points: Point[] ) => {
+        const r = reduce(points)
+        ps = r.ps;
+        rs = r.rs;
+        cs = r.cs;
+    }
+
+    const Dots = reactRegl({
         frag: `
             precision highp float;
             varying vec4 fragColor;
@@ -51,33 +48,44 @@ const useDots = () => {
             attribute vec2 position;
             attribute vec4 color;
             attribute float radius;
+
+            uniform float stageWidth;
+            uniform float stageHeight;
+
             varying vec4 fragColor;
 
-            vec2 normalizeCoords(vec2 position) {
+            vec2 normalizeCoords() {
                 float x = position[0];
                 float y = position[1];
-                return vec2(  2.0 * (x - 0.5), -2.0 * (y - 0.5) );
+                return vec2(
+                    2.0 * ((x / stageWidth) - 0.5), 
+                    -2.0 * ((y / stageHeight) - 0.5) 
+                );
             }
 
             void main() {
                 gl_PointSize = radius;
                 fragColor = color;
-                gl_Position = vec4(normalizeCoords(position), 0.0, 1.0);
+                gl_Position = vec4(normalizeCoords(), 0.0, 1.0);
             }
             `,
 
         attributes: {
-            position: dots.map(d => [d.x, d.y]),
-            color: dots.map(d => d.c),
-            radius: dots.map(d => d.r)
+            position: () => ps,
+            color: () => cs, 
+            radius: () => rs,
         },
 
         uniforms: {
+            stageWidth: ({viewportWidth}: DefaultContext) => viewportWidth, 
+            stageHeight: ({viewportHeight}: DefaultContext) => viewportHeight,
         },
-    
-        count: dots.length,
+
+        count: points.length,
         primitive: 'points',
     } )
+
+    return { Dots, updatePoints }
 }
 
-export default useDots;
+export default useCreateDots;
