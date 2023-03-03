@@ -6,7 +6,8 @@ import Vec2 from "./Vec2";
 
 export default class Solver
 {
-    gravity: Vec2 = new Vec2(0, 9.81 * 40);
+    substeps: number = 2;
+    gravity: Vec2 = new Vec2(0, 9.81 * 100);
     private objects: Point[] = [];
 
     addPoint( p: Point )
@@ -16,9 +17,14 @@ export default class Solver
     
     update( dt: number )
     {
-        this.applyGravity();
-        this.applyConstraint();
-        this.updatePositions(dt);
+        const sub_dt = dt / this.substeps;
+
+        for (let i = 0; i < this.substeps; i++) {
+            this.applyGravity();
+            this.applyConstraint();
+            this.updatePositions(sub_dt);            
+        }
+        
         return this.objects;
     }
 
